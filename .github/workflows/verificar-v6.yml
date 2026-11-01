@@ -15,3 +15,4 @@ jobs:
       - run: npm ci
       - run: node --check src/app.js
       - run: node --check src/modulos-v6.js
+      - run: node --check src/modulos-v7.js
