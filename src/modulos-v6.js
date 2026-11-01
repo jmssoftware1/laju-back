@@ -314,7 +314,7 @@ router.get("/relatorios",gestor,async(req,res)=>{
 });
 router.get("/dashboard",async(req,res)=>{
  try{
-  const [produto,estoque,vendasDia,top]=await Promise.all([
+  const [produto,estoque,vendasDia,top,lucroDia]=await Promise.all([
    sql`SELECT COUNT(*)::int AS produtos FROM loja_produtos WHERE ativo=true`,
    sql`SELECT COALESCE(SUM(v.quantidade),0)::int AS pecas,
     COUNT(*) FILTER (WHERE v.quantidade<=v.minimo)::int AS alertas
@@ -326,10 +326,15 @@ router.get("/dashboard",async(req,res)=>{
    sql`SELECT prod.nome,SUM(i.quantidade)::int AS pecas
     FROM loja_pedido_itens i JOIN loja_pedidos p ON p.id=i.pedido_id JOIN loja_variantes v ON v.id=i.variante_id
     JOIN loja_produtos prod ON prod.id=v.produto_id WHERE p.status='pago'
-    GROUP BY prod.id,prod.nome ORDER BY pecas DESC LIMIT 5`
+    GROUP BY prod.id,prod.nome ORDER BY pecas DESC LIMIT 5`,
+   sql`SELECT COALESCE(SUM(i.quantidade*(i.preco_unitario-COALESCE(i.custo_unitario,prod.custo,0))),0) AS margem
+    FROM loja_pedidos p JOIN loja_pedido_itens i ON i.pedido_id=p.id
+    JOIN loja_variantes v ON v.id=i.variante_id JOIN loja_produtos prod ON prod.id=v.produto_id
+    WHERE p.status='pago' AND p.criado_em::date=CURRENT_DATE`
   ]);
   res.json({...produto[0],...estoque[0],vendas_hoje:vendasDia[0].vendas,
-   faturamento_hoje:Math.max(0,Number(vendasDia[0].bruto)-Number(vendasDia[0].descontos)),top});
+   faturamento_hoje:Math.max(0,Number(vendasDia[0].bruto)-Number(vendasDia[0].descontos)),
+   lucro_hoje_estimado:Number(lucroDia[0].margem)-Number(vendasDia[0].descontos),top});
  }catch(e){erro(res,e);}
 });
 
