@@ -4,6 +4,7 @@ import cors from "cors";
 import authLaju from "./auth-laju.js";
 import lajustore from "./lajustore.js";
 import modulosV6 from "./modulos-v6.js";
+import modulosV7 from "./modulos-v7.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use(cors({
 }));
 app.use("/api/lajustore", lajustore);
 app.use("/api/v6", modulosV6);
+app.use("/api/v7", modulosV7);
 app.use("/api/auth", authLaju);
 
 app.get("/health", (_, res) => res.status(200).json({ status: "ok" }));
