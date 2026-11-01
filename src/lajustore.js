@@ -40,7 +40,7 @@ router.post("/pedidos/:id/concluir",async(req,res)=>{try{
  if(!/^\d+$/.test(req.params.id))return res.status(400).json({mensagem:"Pedido inválido"});
  const outcome=await sql.begin(async tx=>{
  const [p]=await tx`SELECT * FROM loja_pedidos WHERE id=${Number(req.params.id)} FOR UPDATE`;
- if(!p)return 'NAO_ENCONTRADO';if(p.status!=='rascunho')return 'INVALIDO';
+ if(!p)return 'NAO_ENCONTRADO';if(p.origem_fluxo==='v7_pendente')return 'USE_V7';if(p.status!=='rascunho')return 'INVALIDO';
  const itens=await tx`SELECT variante_id,SUM(quantidade)::int AS quantidade FROM loja_pedido_itens WHERE pedido_id=${p.id} GROUP BY variante_id ORDER BY variante_id`;
  if(!itens.length)return 'VAZIO';
  for(const item of itens){const [v]=await tx`UPDATE loja_variantes SET quantidade=quantidade-${item.quantidade} WHERE id=${item.variante_id} AND quantidade>=${item.quantidade} RETURNING id`;if(!v)throw Error('SEM_ESTOQUE');await tx`INSERT INTO loja_movimentos(variante_id,pedido_id,diferenca,motivo) VALUES(${item.variante_id},${p.id},${-item.quantidade},'venda')`;}
