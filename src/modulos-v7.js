@@ -43,7 +43,8 @@ router.get("/pendentes",async(req,res)=>{
         COALESCE(
           json_agg(json_build_object(
             'roupa',prod.nome,'tamanho',v.tamanho,'cor',v.cor,
-            'quantidade',i.quantidade,'preco_unitario',i.preco_unitario
+            'quantidade',i.quantidade,'preco_unitario',i.preco_unitario,
+            'saldo_atual',v.quantidade
           ) ORDER BY i.id) FILTER (WHERE i.id IS NOT NULL),
           '[]'::json
         ) AS itens
