@@ -82,6 +82,8 @@ try{
  const list=expectStatus(await request("/api/v7/pendentes","GET",undefined,admin),200);
  assert.equal(list.length,1);
  assert.equal(list[0].itens[0].quantidade,2);
+ // Um pedido criado dois dias antes deve entrar no relatório do dia do pagamento.
+ await sql`UPDATE loja_pedidos SET criado_em=NOW() - interval '2 days' WHERE id=${pending.id}`;
 
  const completed=expectStatus(await request(`/api/v7/pendentes/${pending.id}/concluir`,"POST",{forma_pagamento:"pix"},admin),200);
  assert.equal(completed.status,"pago");assert.equal(completed.total,90);
