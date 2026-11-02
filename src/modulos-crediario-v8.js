@@ -50,11 +50,11 @@ async function detailFor(rows){
  const [scheduled,receipts]=await Promise.all([
   sql`SELECT crediario_id,numero,valor,vencimento
       FROM loja_crediario_parcelas
-      WHERE crediario_id IN ${sql(ids)}
+      WHERE crediario_id = ANY(${ids}::bigint[])
       ORDER BY crediario_id,numero`,
   sql`SELECT id,crediario_id,valor,forma_pagamento,observacao,recebido_em
       FROM loja_crediario_pagamentos
-      WHERE crediario_id IN ${sql(ids)}
+      WHERE crediario_id = ANY(${ids}::bigint[])
       ORDER BY crediario_id,recebido_em,id`
  ]);
  const paymentsBy=new Map(),parcelsBy=new Map();
