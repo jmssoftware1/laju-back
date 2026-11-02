@@ -145,7 +145,7 @@ test("Crediário V8: venda em aberto, pagamentos parciais Pix, estoque, financei
   const receipts=ledger.data.lancamentos.filter(x=>x.pedido_id==sale.data.id&&x.categoria==="crediario");
   assert.equal(receipts.length,2,"duas parcelas, duas entradas no caixa");
   assert.equal(receipts.reduce((sum,x)=>sum+Math.round(Number(x.valor)*100),0),20058);
-  assert.equal(Number(ledger.data.resumo[0].entradas)-Number(beforeLedger.data.resumo[0].entradas),200.58);
+  assert.equal(Math.round((Number(ledger.data.resumo[0].entradas)-Number(beforeLedger.data.resumo[0].entradas))*100),20058);
 
   const dayRange=`?de=${day()}&ate=${day()}`;
   const indicators=await api("/api/operacao/financeiro/indicadores"+dayRange,{token:admin});
