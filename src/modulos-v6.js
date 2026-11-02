@@ -23,6 +23,9 @@ const erro = (res, e) => {
   if (e.message === "INEXISTENTE") return res.status(404).json({ mensagem: "Registro não encontrado" });
   if (e.message === "STATUS_INVALIDO") return res.status(409).json({ mensagem: "Este pedido não pode ser alterado" });
   if (e.message === "ITEM_INVALIDO") return res.status(400).json({ mensagem: "Uma peça selecionada não existe" });
+  if (e.message === "CLIENTE_INEXISTENTE") return res.status(400).json({ mensagem: "Selecione uma cliente cadastrada para o crediário." });
+  if (e.message === "CREDIARIO_COM_PAGAMENTOS") return res.status(409).json({ mensagem: "Esta venda já tem pagamentos de crediário. Não é possível cancelar automaticamente; procure a administradora para registrar a devolução corretamente." });
+  if (e.message === "CREDIARIO_MIGRACAO") return res.status(503).json({ mensagem: "Crediário indisponível. A migração SQL V8 ainda precisa ser aplicada." });
   return res.status(500).json({ mensagem: "Erro no servidor. Confira se a migração V6 foi executada." });
 };
 const str = (v, max=180) => typeof v === "string" ? v.trim().slice(0,max) : "";
@@ -186,10 +189,19 @@ router.get("/vendas",async(req,res)=>{
  catch(e){erro(res,e);}
 });
 router.post("/vendas",async(req,res)=>{
- const {cliente_id,canal,forma_pagamento,desconto,itens,observacao}=req.body||{};
+ const {cliente_id,canal,forma_pagamento,desconto,itens,observacao,
+  numero_parcelas,primeiro_vencimento,intervalo_dias}=req.body||{};
+ const isCredit=forma_pagamento==="crediario";
+ const installments=isCredit?Number(numero_parcelas??1):1;
+ const interval=isCredit?Number(intervalo_dias??30):30;
  const disc=valor(desconto??0);
+ if(isCredit && req.usuario.role!=="gestor")return res.status(403).json({mensagem:"Somente a administradora pode abrir uma conta de crediário."});
+ if(isCredit&&(!id(cliente_id)||!Number.isSafeInteger(installments)||installments<1||installments>6||
+    ![7,15,30].includes(interval)||!okDate(primeiro_vencimento)||
+    new Date(primeiro_vencimento+"T12:00:00Z").toISOString().slice(0,10)!==primeiro_vencimento))
+    return res.status(400).json({mensagem:"Selecione uma cliente e informe de 1 a 6 parcelas com primeiro vencimento válido."});
  if(!["loja","whatsapp","instagram"].includes(canal)||
-   !["dinheiro","pix","debito","credito","outro"].includes(forma_pagamento) ||
+   !["dinheiro","pix","debito","credito","outro","crediario"].includes(forma_pagamento) ||
    disc===null || (cliente_id!=null&&!id(cliente_id)) ||
    !Array.isArray(itens) || !itens.length || itens.length>80 ||
    itens.some(i=>!id(i.variante_id)||!id(i.quantidade)||id(i.quantidade)>100000))
@@ -209,6 +221,11 @@ router.post("/vendas",async(req,res)=>{
    }
    if(disc>Math.round(subtotal*100)/100)throw Error("DESCONTO_INVALIDO");
    const total=Math.round((subtotal-disc)*100)/100;
+   if(isCredit){
+    if(Math.round(total*100)<installments)throw Error("PARCELAS_INVALIDAS");
+    const [client]=await tx`SELECT id FROM loja_clientes WHERE id=${id(cliente_id)}`;
+    if(!client)throw Error("CLIENTE_INEXISTENTE");
+   }
    const [p]=await tx`INSERT INTO loja_pedidos(cliente_id,canal,status,desconto,forma_pagamento,observacao,criado_por)
      VALUES(${cliente_id?id(cliente_id):null},${canal},'rascunho',${disc},${forma_pagamento},${str(observacao,600)||null},${req.usuario.id}) RETURNING id`;
    for(const item of resolved){
@@ -221,12 +238,30 @@ router.post("/vendas",async(req,res)=>{
      VALUES(${item.id},${p.id},${-item.q},'venda')`;
    }
    await tx`UPDATE loja_pedidos SET status='pago',finalizado_em=NOW() WHERE id=${p.id}`;
+   if(isCredit){
+    const [credit]=await tx`INSERT INTO loja_crediario
+      (pedido_id,cliente_id,total,observacao,registrado_por)
+      VALUES(${p.id},${id(cliente_id)},${total},${str(observacao,600)||null},${req.usuario.id})
+      RETURNING id`;
+    const base=Math.floor(Math.round(total*100)/installments);
+    const remainder=Math.round(total*100)-base*installments;
+    for(let i=0;i<installments;i++){
+     const due=new Date(primeiro_vencimento+"T12:00:00Z");
+     due.setUTCDate(due.getUTCDate()+i*interval);
+     const value=(base+(i===installments-1?remainder:0))/100;
+     await tx`INSERT INTO loja_crediario_parcelas(crediario_id,numero,valor,vencimento)
+       VALUES(${credit.id},${i+1},${value},${due.toISOString().slice(0,10)})`;
+    }
+    return {id:p.id,total,crediario_id:Number(credit.id),status:"em_aberto"};
+   }
    if(total>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por,data_movimento)
     VALUES('entrada','vendas',${"Venda #"+p.id+" ("+forma_pagamento+")"},${total},'pago',${p.id},${req.usuario.id},${dataComercial()})`;
    return {id:p.id,total};
   });
   res.status(201).json(venda);
- }catch(e){if(e.message==="DESCONTO_INVALIDO")return res.status(400).json({mensagem:"Desconto maior que o subtotal"});erro(res,e);}
+  }catch(e){if(["DESCONTO_INVALIDO","PARCELAS_INVALIDAS"].includes(e.message))return res.status(400).json({mensagem:"Desconto inválido ou quantidade de parcelas maior que o valor em centavos."});
+ if(e.code==="42P01")return res.status(503).json({mensagem:"Antes de usar o crediário, aplique a migração SQL V8 no Supabase."});
+ erro(res,e);}
 });
 router.post("/vendas/:id/cancelar",gestor,async(req,res)=>{
  const pedidoId=id(req.params.id);
@@ -236,6 +271,13 @@ router.post("/vendas/:id/cancelar",gestor,async(req,res)=>{
   const [p]=await tx`SELECT * FROM loja_pedidos WHERE id=${pedidoId} FOR UPDATE`;
   if(!p)throw Error("INEXISTENTE");
   if(p.status!=="pago")throw Error("STATUS_INVALIDO");
+  if(p.forma_pagamento==="crediario"){
+   const [credit]=await tx`SELECT id,status FROM loja_crediario WHERE pedido_id=${p.id} FOR UPDATE`;
+   if(!credit)throw Error("STATUS_INVALIDO");
+   const [received]=await tx`SELECT COUNT(*)::int AS qtd FROM loja_crediario_pagamentos WHERE crediario_id=${credit.id}`;
+   if(received.qtd>0)throw Error("CREDIARIO_COM_PAGAMENTOS");
+   await tx`UPDATE loja_crediario SET status='cancelado' WHERE id=${credit.id}`;
+  }
   const itens=await tx`SELECT variante_id,SUM(quantidade)::int AS qtd FROM loja_pedido_itens
    WHERE pedido_id=${p.id} GROUP BY variante_id ORDER BY variante_id`;
   for(const item of itens){
@@ -246,7 +288,7 @@ router.post("/vendas/:id/cancelar",gestor,async(req,res)=>{
   const [totalRow]=await tx`SELECT GREATEST(0,COALESCE(SUM(quantidade*preco_unitario),0)-${Number(p.desconto)}) AS total
    FROM loja_pedido_itens WHERE pedido_id=${p.id}`;
   await tx`UPDATE loja_pedidos SET status='cancelado' WHERE id=${p.id}`;
-  if(Number(totalRow.total)>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por,data_movimento)
+  if(p.forma_pagamento!=="crediario"&&Number(totalRow.total)>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por,data_movimento)
     VALUES('saida','estorno',${"Cancelamento da venda #"+p.id},${Number(totalRow.total)},'pago',${p.id},${req.usuario.id},${dataComercial()})`;
   return {id:p.id,status:"cancelado"};
  });

@@ -137,7 +137,10 @@ const EXPORT_TABLES=Object.freeze([
  "loja_compras",
  "loja_compra_itens",
  "loja_financeiro",
- "loja_auditoria_v7"
+ "loja_auditoria_v7",
+ "loja_crediario",
+ "loja_crediario_parcelas",
+ "loja_crediario_pagamentos"
 ]);
 const ROW_LIMIT=5000;
 const EXPORT_BYTES=15*1024*1024;

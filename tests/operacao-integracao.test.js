@@ -33,7 +33,7 @@ test("Operação: alertas, finanças, exportação e permissões com PostgreSQL 
  let server;let logs="";
  try {
   // Pode executar mesmo se os testes V7 já tiverem preparado as tabelas.
-  for(const file of ["sql/001_schema_limpo.sql","sql/002_modulos_v6.sql","sql/003_pedidos_pendentes_v7.sql"]){
+  for(const file of ["sql/001_schema_limpo.sql","sql/002_modulos_v6.sql","sql/003_pedidos_pendentes_v7.sql","sql/004_crediario_clientes_v8.sql"]){
    const source=(await fs.readFile(new URL(file,ROOT),"utf8")).replace(/^\s*--.*$/gm,"");
    for(const statement of source.split(";").map(s=>s.trim()).filter(Boolean))await sql.unsafe(statement);
   }
