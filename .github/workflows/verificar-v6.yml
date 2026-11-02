@@ -36,8 +36,10 @@ jobs:
       - run: node --check src/modulos-v7.js
       - run: node --check src/modulos-operacao.js
       - run: node --check src/modulos-crediario-v8.js
+      - run: node --check src/modulos-reversao-v9.js
       - run: node --test tests/v7-validacao.test.js
       - run: node --test tests/v7-integracao.test.js
       - run: node --test tests/operacao-integracao.test.js
       - run: node --test tests/crediario-integracao.test.js
+      - run: node --test tests/reversao-v9-integracao.test.js
       - run: node --test tests/backup-entrega.test.js
