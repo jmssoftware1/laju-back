@@ -6,6 +6,7 @@ import {
 } from "./v7-validacao.js";
 
 const router = express.Router();
+const dataComercial = () => new Intl.DateTimeFormat("en-CA", {timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 router.use(requireSession);
 router.use(async (req,res,next)=>{
   try {
@@ -148,9 +149,9 @@ router.post("/pendentes/:id/concluir",async(req,res)=>{
         WHERE id=${pedidoId}`;
       if (total>0){
         await tx`
-          INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por)
+          INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por,data_movimento)
           VALUES('entrada','vendas',${"Venda #"+pedidoId+" ("+pagamento+")"},
-            ${total},'pago',${pedidoId},${req.usuario.id})`;
+            ${total},'pago',${pedidoId},${req.usuario.id},${dataComercial()})`;
       }
       const details=JSON.stringify({forma_pagamento:pagamento,total});
       await tx`

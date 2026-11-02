@@ -4,6 +4,7 @@ import sql from "./bd.js";
 import { requireSession } from "./session.js";
 
 const router = express.Router();
+const dataComercial = () => new Intl.DateTimeFormat("en-CA", {timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 router.use(requireSession);
 router.use(async (req, res, next) => {
   try {
@@ -167,8 +168,8 @@ router.post("/compras",gestor,async(req,res)=>{
     await tx`INSERT INTO loja_movimentos(variante_id,diferenca,motivo)
       VALUES(${v.id},${id(item.quantidade)},${"compra #"+c.id})`;
    }
-   if(total>0) await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,compra_id,registrado_por)
-    VALUES('saida','mercadorias',${"Compra de estoque #"+c.id},${Math.round(total*100)/100},'pago',${c.id},${req.usuario.id})`;
+   if(total>0) await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,compra_id,registrado_por,data_movimento)
+    VALUES('saida','mercadorias',${"Compra de estoque #"+c.id},${Math.round(total*100)/100},'pago',${c.id},${req.usuario.id},${dataComercial()})`;
    return c;
   });
   res.status(201).json(compra);
@@ -220,8 +221,8 @@ router.post("/vendas",async(req,res)=>{
      VALUES(${item.id},${p.id},${-item.q},'venda')`;
    }
    await tx`UPDATE loja_pedidos SET status='pago',finalizado_em=NOW() WHERE id=${p.id}`;
-   if(total>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por)
-    VALUES('entrada','vendas',${"Venda #"+p.id+" ("+forma_pagamento+")"},${total},'pago',${p.id},${req.usuario.id})`;
+   if(total>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por,data_movimento)
+    VALUES('entrada','vendas',${"Venda #"+p.id+" ("+forma_pagamento+")"},${total},'pago',${p.id},${req.usuario.id},${dataComercial()})`;
    return {id:p.id,total};
   });
   res.status(201).json(venda);
@@ -245,8 +246,8 @@ router.post("/vendas/:id/cancelar",gestor,async(req,res)=>{
   const [totalRow]=await tx`SELECT GREATEST(0,COALESCE(SUM(quantidade*preco_unitario),0)-${Number(p.desconto)}) AS total
    FROM loja_pedido_itens WHERE pedido_id=${p.id}`;
   await tx`UPDATE loja_pedidos SET status='cancelado' WHERE id=${p.id}`;
-  if(Number(totalRow.total)>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por)
-    VALUES('saida','estorno',${"Cancelamento da venda #"+p.id},${Number(totalRow.total)},'pago',${p.id},${req.usuario.id})`;
+  if(Number(totalRow.total)>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por,data_movimento)
+    VALUES('saida','estorno',${"Cancelamento da venda #"+p.id},${Number(totalRow.total)},'pago',${p.id},${req.usuario.id},${dataComercial()})`;
   return {id:p.id,status:"cancelado"};
  });
  res.json(result);
@@ -270,15 +271,15 @@ router.post("/financeiro",gestor,async(req,res)=>{
  if(!["entrada","saida"].includes(tipo)||!["pago","pendente"].includes(status)||!str(categoria,80)||!str(descricao,180)||valor(amount)===null||valor(amount)===0||(data_movimento&&!okDate(data_movimento)))
  return res.status(400).json({mensagem:"Lançamento inválido"});
  try{const [l]=await sql`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,data_movimento,registrado_por)
- VALUES(${tipo},${str(categoria,80)},${str(descricao,180)},${valor(amount)},${status},${data_movimento||new Date().toISOString().slice(0,10)},${req.usuario.id}) RETURNING *`;
+ VALUES(${tipo},${str(categoria,80)},${str(descricao,180)},${valor(amount)},${status},${data_movimento||dataComercial()},${req.usuario.id}) RETURNING *`;
  res.status(201).json(l);}
  catch(e){erro(res,e);}
 });
 
 // RELATÓRIOS
 router.get("/relatorios",gestor,async(req,res)=>{
- const hoje=new Date().toISOString().slice(0,10);
- const de=okDate(req.query.de)||new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+ const hoje=dataComercial();
+ const de=okDate(req.query.de)||new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(Date.now()-29*86400000));
  const ate=okDate(req.query.ate)||hoje;
  if(de>ate)return res.status(400).json({mensagem:"Período inválido"});
  try{
@@ -286,26 +287,26 @@ router.get("/relatorios",gestor,async(req,res)=>{
    sql`SELECT COUNT(DISTINCT p.id)::int AS vendas,
     COALESCE(SUM(i.quantidade*i.preco_unitario),0) AS bruto,
     COALESCE(SUM(i.quantidade*(i.preco_unitario-COALESCE(i.custo_unitario,prod.custo,0))),0) AS margem_bruta,
-    COALESCE((SELECT SUM(desconto) FROM loja_pedidos WHERE status='pago' AND criado_em::date BETWEEN ${de} AND ${ate}),0) AS descontos
+    COALESCE((SELECT SUM(desconto) FROM loja_pedidos WHERE status='pago' AND (COALESCE(finalizado_em,criado_em) AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ${de} AND ${ate}),0) AS descontos
     FROM loja_pedidos p
     LEFT JOIN loja_pedido_itens i ON i.pedido_id=p.id
     LEFT JOIN loja_variantes v ON v.id=i.variante_id
     LEFT JOIN loja_produtos prod ON prod.id=v.produto_id
-    WHERE p.status='pago' AND p.criado_em::date BETWEEN ${de} AND ${ate}`,
+    WHERE p.status='pago' AND (COALESCE(p.finalizado_em,p.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ${de} AND ${ate}`,
    sql`SELECT p.canal,COUNT(DISTINCT p.id)::int AS vendas,
-    GREATEST(0,COALESCE(SUM(i.quantidade*i.preco_unitario),0)-COALESCE((SELECT SUM(desconto) FROM loja_pedidos pd WHERE pd.canal=p.canal AND pd.status='pago' AND pd.criado_em::date BETWEEN ${de} AND ${ate}),0)) AS total
+    GREATEST(0,COALESCE(SUM(i.quantidade*i.preco_unitario),0)-COALESCE((SELECT SUM(desconto) FROM loja_pedidos pd WHERE pd.canal=p.canal AND pd.status='pago' AND (COALESCE(pd.finalizado_em,pd.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ${de} AND ${ate}),0)) AS total
     FROM loja_pedidos p LEFT JOIN loja_pedido_itens i ON i.pedido_id=p.id
-    WHERE p.status='pago' AND p.criado_em::date BETWEEN ${de} AND ${ate} GROUP BY p.canal ORDER BY total DESC`,
+    WHERE p.status='pago' AND (COALESCE(p.finalizado_em,p.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ${de} AND ${ate} GROUP BY p.canal ORDER BY total DESC`,
    sql`SELECT prod.nome,v.tamanho,v.cor, SUM(i.quantidade)::int AS pecas, SUM(i.quantidade*i.preco_unitario) AS bruto
     FROM loja_pedido_itens i JOIN loja_pedidos p ON p.id=i.pedido_id
     JOIN loja_variantes v ON v.id=i.variante_id JOIN loja_produtos prod ON prod.id=v.produto_id
-    WHERE p.status='pago' AND p.criado_em::date BETWEEN ${de} AND ${ate}
+    WHERE p.status='pago' AND (COALESCE(p.finalizado_em,p.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ${de} AND ${ate}
     GROUP BY prod.nome,v.tamanho,v.cor ORDER BY pecas DESC LIMIT 10`,
-   sql`SELECT p.criado_em::date AS dia, COUNT(DISTINCT p.id)::int AS vendas,
+   sql`SELECT (COALESCE(p.finalizado_em,p.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date AS dia, COUNT(DISTINCT p.id)::int AS vendas,
     COALESCE(SUM(i.quantidade*i.preco_unitario),0) AS bruto
     FROM loja_pedidos p LEFT JOIN loja_pedido_itens i ON i.pedido_id=p.id
-    WHERE p.status='pago' AND p.criado_em::date BETWEEN ${de} AND ${ate}
-    GROUP BY p.criado_em::date ORDER BY dia`
+    WHERE p.status='pago' AND (COALESCE(p.finalizado_em,p.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ${de} AND ${ate}
+    GROUP BY (COALESCE(p.finalizado_em,p.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date ORDER BY dia`
   ]);
   const t=totais[0];const margem=Number(t.margem_bruta)-Number(t.descontos);
   res.json({de,ate,totais:{...t,faturamento:Math.max(0,Number(t.bruto)-Number(t.descontos)),lucro_estimado:margem},
@@ -320,9 +321,9 @@ router.get("/dashboard",async(req,res)=>{
     COUNT(*) FILTER (WHERE v.quantidade<=v.minimo)::int AS alertas
     FROM loja_variantes v JOIN loja_produtos p ON p.id=v.produto_id WHERE p.ativo=true`,
    sql`SELECT COUNT(DISTINCT p.id)::int AS vendas, COALESCE(SUM(i.preco_unitario*i.quantidade),0) AS bruto,
-     COALESCE((SELECT SUM(desconto) FROM loja_pedidos WHERE status='pago' AND criado_em::date=CURRENT_DATE),0) AS descontos
+     COALESCE((SELECT SUM(desconto) FROM loja_pedidos WHERE status='pago' AND (COALESCE(finalizado_em,criado_em) AT TIME ZONE 'America/Sao_Paulo')::date=${dataComercial()}),0) AS descontos
     FROM loja_pedidos p LEFT JOIN loja_pedido_itens i ON i.pedido_id=p.id
-    WHERE p.status='pago' AND p.criado_em::date=CURRENT_DATE`,
+    WHERE p.status='pago' AND (COALESCE(p.finalizado_em,p.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date=${dataComercial()}`,
    sql`SELECT prod.nome,SUM(i.quantidade)::int AS pecas
     FROM loja_pedido_itens i JOIN loja_pedidos p ON p.id=i.pedido_id JOIN loja_variantes v ON v.id=i.variante_id
     JOIN loja_produtos prod ON prod.id=v.produto_id WHERE p.status='pago'
@@ -330,7 +331,7 @@ router.get("/dashboard",async(req,res)=>{
    sql`SELECT COALESCE(SUM(i.quantidade*(i.preco_unitario-COALESCE(i.custo_unitario,prod.custo,0))),0) AS margem
     FROM loja_pedidos p JOIN loja_pedido_itens i ON i.pedido_id=p.id
     JOIN loja_variantes v ON v.id=i.variante_id JOIN loja_produtos prod ON prod.id=v.produto_id
-    WHERE p.status='pago' AND p.criado_em::date=CURRENT_DATE`
+    WHERE p.status='pago' AND (COALESCE(p.finalizado_em,p.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date=${dataComercial()}`
   ]);
   res.json({...produto[0],...estoque[0],vendas_hoje:vendasDia[0].vendas,
    faturamento_hoje:Math.max(0,Number(vendasDia[0].bruto)-Number(vendasDia[0].descontos)),
