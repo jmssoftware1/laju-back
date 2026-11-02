@@ -98,6 +98,12 @@ test("Operação: alertas, finanças, exportação e permissões com PostgreSQL 
   assert.equal(sale.status,201,JSON.stringify(sale.data));
   assert.equal(sale.data.total,200);
 
+  const oldDashboard=await api("/api/v6/dashboard",{token:admin});
+  assert.equal(oldDashboard.status,200,JSON.stringify(oldDashboard.data));
+  const oldReport=await api("/api/v6/relatorios"+range,{token:admin});
+  assert.equal(oldReport.status,200,JSON.stringify(oldReport.data));
+  assert.ok(oldReport.data.totais.vendas>=1);
+
   const alerts=await api("/api/operacao/estoque/alertas",{token:admin});
   assert.equal(alerts.status,200,JSON.stringify(alerts.data));
   assert.ok(alerts.data.itens.some(v=>v.variante_id===variant.id&&v.quantidade===2&&v.minimo===3));
