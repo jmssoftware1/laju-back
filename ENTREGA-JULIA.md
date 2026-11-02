@@ -13,7 +13,7 @@ migração SQL.
 5. Integrar frontend somente após a API estar funcionando.
 
 ## Checklist antes de entregar o acesso
-- [ ] Backup COMPLETO (pg_dump) salvo em local privado e criptografado.
+- [ ] Backup das tabelas LajuStore (schema public) salvo em local privado e criptografado.
 - [ ] Restauração testada em um projeto de banco DIFERENTE da produção.
 - [ ] Julia e funcionária conseguem entrar e têm apenas as permissões corretas.
 - [ ] Roupa fictícia com saldo 2 e mínimo 3 aparece no dashboard.
@@ -28,25 +28,37 @@ migração SQL.
 - [ ] SESSION_SECRET, senha PostgreSQL e tokens expostos em prints antigos rotacionados.
 - [ ] Responsável e frequência de backup definidos.
 
-## Backup completo PostgreSQL no Windows
-A exportação JSON do painel é SOMENTE PARA CONSULTA. Não inclui usuários nem
-é um arquivo de restauração. Backup real exige pg_dump.
+## Backup das tabelas da LajuStore no Windows
+A exportação JSON do painel é SOMENTE PARA CONSULTA. Não inclui usuários
+e não é um arquivo de restauração. Para recuperar a aplicação, use o
+backup das tabelas do schema `public` feito pelo script PowerShell.
+O script não faz cópia dos schemas gerenciados pelo Supabase nem dos
+arquivos do Storage. Não o apresente como backup integral da plataforma.
 
 1. Instale PostgreSQL Client Tools, com pg_dump de versão major igual ou mais
    recente que a do servidor do Supabase.
 2. Configure a variável de ambiente DATABASE_URL na sua sessão segura do
    PowerShell, sem armazenar credenciais em arquivos ou no GitHub.
 3. Entre na pasta laju-back e execute scripts/backup-completo.ps1.
-4. O arquivo .dump gerado contém tabelas comerciais E usuários (inclusive
-   hashes de senha). Guarde-o cifrado, com acesso restrito e cópia externa.
+4. O arquivo `.dump` gerado contém as tabelas `public`, inclusive
+   `loja_usuarios` com hashes de senhas. Guarde-o criptografado,
+   com acesso restrito e cópia externa.
 5. O script verifica se pg_restore consegue ler o índice do arquivo;
    isso NÃO confirma que uma restauração integral funcionará.
-6. Crie um projeto PostgreSQL de teste SEPARADO, vazio, e restaure nele:
-   pg_restore --no-owner --no-acl --dbname=CONEXAO_DE_TESTE arquivo.dump
-7. Compare dados, usuários, saldos e relatórios com a fonte. Nunca teste
-   restauração no banco de produção.
-8. Faça backup diário quando fechar a loja e antes de atualizações, com
-   restauração de teste periódica e registro das datas.
+6. Crie um banco PostgreSQL de teste SEPARADO e vazio (por exemplo,
+   `laju_homologacao` em um PostgreSQL local). Configure as variáveis
+   de acesso apenas para esse banco e execute:
+   `pg_restore --no-owner --no-acl --single-transaction --exit-on-error --dbname=laju_homologacao arquivo.dump`
+   **Antes de executar, confirme que a conexão aponta para o banco de
+   teste, nunca para o Supabase de produção.** Uma tentativa que dá
+   erro não conta como restauração validada.
+7. Compare usuários, produtos, estoque, pedidos e financeiro no banco
+   restaurado, e documente data/resultado da verificação.
+8. Faça cópia diária ao fechar a loja e antes de atualizações, com
+   restauração de teste periódica e registro das datas. Para preservar
+   outros serviços Supabase (Auth/Storage/Edge Functions), siga também
+   as instruções oficiais de cópia da plataforma e de arquivos.
+   https://supabase.com/docs/guides/platform/backups
 
 Backups Supabase variam por plano. Não presuma que o plano gratuito possui
 backups automáticos. Documentação:

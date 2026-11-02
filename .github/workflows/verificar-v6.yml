@@ -38,3 +38,4 @@ jobs:
       - run: node --test tests/v7-validacao.test.js
       - run: node --test tests/v7-integracao.test.js
       - run: node --test tests/operacao-integracao.test.js
+      - run: node --test tests/backup-entrega.test.js
