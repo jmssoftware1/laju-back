@@ -97,7 +97,7 @@ test("Crediário V8: venda em aberto, pagamentos parciais Pix, estoque, financei
   const [stock]=await db`SELECT quantidade FROM loja_variantes WHERE id=${variant.id}`;
   assert.equal(stock.quantidade,3,"crediário entrega as peças agora");
   const afterSaleLedger=await api("/api/v6/financeiro",{token:admin});
-  assert.equal(Number(afterSaleLedger.data.resumo.entradas),Number(beforeLedger.data.resumo.entradas),
+  assert.equal(Number(afterSaleLedger.data.resumo[0].entradas),Number(beforeLedger.data.resumo[0].entradas),
    "crediário não deve antecipar entrada no caixa");
   const open=await api("/api/v8/crediario?cliente_id="+cid,{token:admin});
   assert.equal(open.status,200,JSON.stringify(open.data));
@@ -145,7 +145,7 @@ test("Crediário V8: venda em aberto, pagamentos parciais Pix, estoque, financei
   const receipts=ledger.data.lancamentos.filter(x=>x.pedido_id==sale.data.id&&x.categoria==="crediario");
   assert.equal(receipts.length,2,"duas parcelas, duas entradas no caixa");
   assert.equal(receipts.reduce((sum,x)=>sum+Math.round(Number(x.valor)*100),0),20058);
-  assert.equal(Number(ledger.data.resumo.entradas)-Number(beforeLedger.data.resumo.entradas),200.58);
+  assert.equal(Number(ledger.data.resumo[0].entradas)-Number(beforeLedger.data.resumo[0].entradas),200.58);
 
   const dayRange=`?de=${day()}&ate=${day()}`;
   const indicators=await api("/api/operacao/financeiro/indicadores"+dayRange,{token:admin});
@@ -166,7 +166,7 @@ test("Crediário V8: venda em aberto, pagamentos parciais Pix, estoque, financei
   const canceled=await api(`/api/v6/vendas/${other.data.id}/cancelar`,{method:"POST",token:admin});
   assert.equal(canceled.status,200,JSON.stringify(canceled.data));
   const afterCancel=await api("/api/v6/financeiro",{token:admin});
-  assert.equal(Number(afterCancel.data.resumo.saidas),Number(beforeCancel.data.resumo.saidas));
+  assert.equal(Number(afterCancel.data.resumo[0].saidas),Number(beforeCancel.data.resumo[0].saidas));
   const canceledAccount=await api(`/api/v8/crediario/${other.data.crediario_id}`,{token:admin});
   assert.equal(canceledAccount.data.status,"cancelado");
   const [stockEnd]=await db`SELECT quantidade FROM loja_variantes WHERE id=${variant.id}`;
