@@ -4,7 +4,7 @@ import {requireSession} from "./session.js";
 
 const router=express.Router();
 const money=value=>{
- if((typeof value!=="number"&&typeof value!=="string")||!/^\\d{1,8}(?:\\.\\d{1,2})?$/.test(String(value)))return null;
+ if((typeof value!=="number"&&typeof value!=="string")||!/^\d{1,8}(?:\.\d{1,2})?$/.test(String(value)))return null;
  const [whole,fraction=""]=String(value).split(".");
  const result=Number(whole)*100+Number(fraction.padEnd(2,"0"));
  return Number.isSafeInteger(result)&&result>0?result:null;
