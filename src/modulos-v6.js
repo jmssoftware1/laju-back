@@ -4,6 +4,7 @@ import sql from "./bd.js";
 import { requireSession } from "./session.js";
 
 const router = express.Router();
+const dataComercial = () => new Intl.DateTimeFormat("en-CA", {timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 router.use(requireSession);
 router.use(async (req, res, next) => {
   try {
@@ -167,8 +168,8 @@ router.post("/compras",gestor,async(req,res)=>{
     await tx`INSERT INTO loja_movimentos(variante_id,diferenca,motivo)
       VALUES(${v.id},${id(item.quantidade)},${"compra #"+c.id})`;
    }
-   if(total>0) await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,compra_id,registrado_por)
-    VALUES('saida','mercadorias',${"Compra de estoque #"+c.id},${Math.round(total*100)/100},'pago',${c.id},${req.usuario.id})`;
+   if(total>0) await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,compra_id,registrado_por,data_movimento)
+    VALUES('saida','mercadorias',${"Compra de estoque #"+c.id},${Math.round(total*100)/100},'pago',${c.id},${req.usuario.id},${dataComercial()})`;
    return c;
   });
   res.status(201).json(compra);
@@ -220,8 +221,8 @@ router.post("/vendas",async(req,res)=>{
      VALUES(${item.id},${p.id},${-item.q},'venda')`;
    }
    await tx`UPDATE loja_pedidos SET status='pago',finalizado_em=NOW() WHERE id=${p.id}`;
-   if(total>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por)
-    VALUES('entrada','vendas',${"Venda #"+p.id+" ("+forma_pagamento+")"},${total},'pago',${p.id},${req.usuario.id})`;
+   if(total>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por,data_movimento)
+    VALUES('entrada','vendas',${"Venda #"+p.id+" ("+forma_pagamento+")"},${total},'pago',${p.id},${req.usuario.id},${dataComercial()})`;
    return {id:p.id,total};
   });
   res.status(201).json(venda);
@@ -245,8 +246,8 @@ router.post("/vendas/:id/cancelar",gestor,async(req,res)=>{
   const [totalRow]=await tx`SELECT GREATEST(0,COALESCE(SUM(quantidade*preco_unitario),0)-${Number(p.desconto)}) AS total
    FROM loja_pedido_itens WHERE pedido_id=${p.id}`;
   await tx`UPDATE loja_pedidos SET status='cancelado' WHERE id=${p.id}`;
-  if(Number(totalRow.total)>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por)
-    VALUES('saida','estorno',${"Cancelamento da venda #"+p.id},${Number(totalRow.total)},'pago',${p.id},${req.usuario.id})`;
+  if(Number(totalRow.total)>0)await tx`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,pedido_id,registrado_por,data_movimento)
+    VALUES('saida','estorno',${"Cancelamento da venda #"+p.id},${Number(totalRow.total)},'pago',${p.id},${req.usuario.id},${dataComercial()})`;
   return {id:p.id,status:"cancelado"};
  });
  res.json(result);
@@ -270,7 +271,7 @@ router.post("/financeiro",gestor,async(req,res)=>{
  if(!["entrada","saida"].includes(tipo)||!["pago","pendente"].includes(status)||!str(categoria,80)||!str(descricao,180)||valor(amount)===null||valor(amount)===0||(data_movimento&&!okDate(data_movimento)))
  return res.status(400).json({mensagem:"Lançamento inválido"});
  try{const [l]=await sql`INSERT INTO loja_financeiro(tipo,categoria,descricao,valor,status,data_movimento,registrado_por)
- VALUES(${tipo},${str(categoria,80)},${str(descricao,180)},${valor(amount)},${status},${data_movimento||new Date().toISOString().slice(0,10)},${req.usuario.id}) RETURNING *`;
+ VALUES(${tipo},${str(categoria,80)},${str(descricao,180)},${valor(amount)},${status},${data_movimento||dataComercial()},${req.usuario.id}) RETURNING *`;
  res.status(201).json(l);}
  catch(e){erro(res,e);}
 });
