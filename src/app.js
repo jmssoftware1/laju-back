@@ -7,6 +7,7 @@ import modulosV6 from "./modulos-v6.js";
 import modulosV7 from "./modulos-v7.js";
 import operacao from "./modulos-operacao.js";
 import crediarioV8 from "./modulos-crediario-v8.js";
+import reversaoV9 from "./modulos-reversao-v9.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,6 +32,7 @@ app.use("/api/v6", modulosV6);
 app.use("/api/v7", modulosV7);
 app.use("/api/operacao", operacao);
 app.use("/api/v8/crediario", crediarioV8);
+app.use("/api/v9", reversaoV9);
 app.use("/api/auth", authLaju);
 
 app.get("/health", (_, res) => res.status(200).json({ status: "ok" }));
