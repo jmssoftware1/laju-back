@@ -222,7 +222,7 @@ router.post("/vendas",async(req,res)=>{
    if(disc>Math.round(subtotal*100)/100)throw Error("DESCONTO_INVALIDO");
    const total=Math.round((subtotal-disc)*100)/100;
    if(isCredit){
-    if(total<=0)return Promise.reject(Error("DESCONTO_INVALIDO"));
+    if(Math.round(total*100)<installments)throw Error("PARCELAS_INVALIDAS");
     const [client]=await tx`SELECT id FROM loja_clientes WHERE id=${id(cliente_id)}`;
     if(!client)throw Error("CLIENTE_INEXISTENTE");
    }
@@ -259,7 +259,7 @@ router.post("/vendas",async(req,res)=>{
    return {id:p.id,total};
   });
   res.status(201).json(venda);
-  }catch(e){if(e.message==="DESCONTO_INVALIDO")return res.status(400).json({mensagem:"Desconto inválido ou valor do crediário zerado"});
+  }catch(e){if(["DESCONTO_INVALIDO","PARCELAS_INVALIDAS"].includes(e.message))return res.status(400).json({mensagem:"Desconto inválido ou quantidade de parcelas maior que o valor em centavos."});
  if(e.code==="42P01")return res.status(503).json({mensagem:"Antes de usar o crediário, aplique a migração SQL V8 no Supabase."});
  erro(res,e);}
 });
