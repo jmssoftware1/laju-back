@@ -45,4 +45,11 @@ CREATE INDEX IF NOT EXISTS idx_laju_crediario_vencimentos
 CREATE INDEX IF NOT EXISTS idx_laju_crediario_pagamentos
  ON public.loja_crediario_pagamentos(crediario_id,recebido_em);
 
+-- Bloqueia acesso direto a dados pessoais/financeiros pelo PostgREST
+-- do Supabase (anon/authenticated). O backend, conectado como dono do
+-- banco, continua atendendo apenas as sessões gestoras autorizadas.
+ALTER TABLE public.loja_crediario ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loja_crediario_parcelas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loja_crediario_pagamentos ENABLE ROW LEVEL SECURITY;
+
 COMMIT;
