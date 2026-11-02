@@ -121,8 +121,9 @@ test("V9: desfazer cancelamento sem perdas, caixa duplicado ou acesso indevido",
    SELECT operacao,detalhes FROM loja_auditoria_v7
    WHERE entidade='pedido' AND registro_id=${saleId} AND operacao='cancelamento_desfeito'`;
   assert.equal(audit.operacao,"cancelamento_desfeito");
-  assert.equal(audit.detalhes.motivo,confirm.motivo);
-  assert.equal(audit.detalhes.confirmar_sem_devolucao,true);
+  const auditDetails=typeof audit.detalhes==="string"?JSON.parse(audit.detalhes):audit.detalhes;
+  assert.equal(auditDetails.motivo,confirm.motivo);
+  assert.equal(auditDetails.confirmar_sem_devolucao,true);
 
   const again=await api(rev,{token:admin,method:"POST",body:confirm});
   assert.equal(again.status,409,"Desfazer duas vezes não deve duplicar movimento");
