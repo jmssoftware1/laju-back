@@ -106,7 +106,7 @@ test("Operação: alertas, finanças, exportação e permissões com PostgreSQL 
 
   const alerts=await api("/api/operacao/estoque/alertas",{token:admin});
   assert.equal(alerts.status,200,JSON.stringify(alerts.data));
-  assert.ok(alerts.data.itens.some(v=>v.variante_id===variant.id&&v.quantidade===2&&v.minimo===3));
+  assert.ok(alerts.data.itens.some(v=>Number(v.variante_id)===Number(variant.id)&&Number(v.quantidade)===2&&Number(v.minimo)===3),JSON.stringify({id:variant.id,itens:alerts.data.itens}));
   assert.ok(alerts.data.total>0);
 
   const expense=await api("/api/v6/financeiro",{method:"POST",token:admin,body:{
