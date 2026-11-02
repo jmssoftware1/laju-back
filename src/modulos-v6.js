@@ -182,6 +182,8 @@ router.post("/compras",gestor,async(req,res)=>{
 // VENDAS / PDV — operação atômica com desconto e histórico financeiro
 router.get("/vendas",async(req,res)=>{
  try{res.json(await sql`SELECT p.id,p.cliente_id,p.canal,p.status,p.criado_em,p.desconto,p.forma_pagamento,p.observacao,c.nome AS cliente,
+ EXISTS(SELECT 1 FROM loja_movimentos m
+   WHERE m.pedido_id=p.id AND m.motivo='cancelamento') AS cancelamento_reversivel,
  GREATEST(0,COALESCE(SUM(i.quantidade*i.preco_unitario),0)-p.desconto) AS total
  FROM loja_pedidos p LEFT JOIN loja_clientes c ON c.id=p.cliente_id
  LEFT JOIN loja_pedido_itens i ON i.pedido_id=p.id
