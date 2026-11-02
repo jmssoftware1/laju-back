@@ -4,9 +4,10 @@ import {requireSession} from "./session.js";
 
 const router=express.Router();
 const money=value=>{
- if(value===""||value===null||value===undefined||!Number.isFinite(Number(value))||
-    Number(value)<=0||Number(value)>99999999||Math.round(Number(value)*100)!==Number(value)*100)return null;
- return Math.round(Number(value)*100);
+ if((typeof value!=="number"&&typeof value!=="string")||!/^\\d{1,8}(?:\\.\\d{1,2})?$/.test(String(value)))return null;
+ const [whole,fraction=""]=String(value).split(".");
+ const result=Number(whole)*100+Number(fraction.padEnd(2,"0"));
+ return Number.isSafeInteger(result)&&result>0?result:null;
 };
 const id=value=>Number.isSafeInteger(Number(value))&&Number(value)>0?Number(value):null;
 const cents=value=>Math.round(Number(value||0)*100);
